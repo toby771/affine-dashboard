@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+
+{% block title %}Miner Submissions — SN120 Manager{% endblock %}
+
+{% block content %}
+<section class="page-heading" data-refresh-seconds="{{ refresh_seconds|int }}">
+    <div>
+        <h1>Miner submissions by epoch</h1>
+        <p class="muted">
+            Select coldkeys to see a separate submission history for every
+            miner hotkey and UID they own.
+            {% if history %}Data refreshed {{ history.updated_at | timestamp }}.{% endif %}
+        </p>
+    </div>
+</section>
+
+{% if error %}
+<div class="alert error">
+    <strong>Unable to load submission data:</strong>
+    <span>{{ error }}</span>
+</div>
+{% endif %}
+
+{% if history %}
+<form class="panel selection-panel" method="get" action="{{ url_for('submissions') }}">
+    <div class="selection-tools">
+        <input id="coldkey-search" class="search" type="search"
+               placeholder="Filter coldkeys…" autocomplete="off">
+        <button class="button" type="submit">Show chart</button>
+    </div>
+    <div class="coldkey-options" id="coldkey-options">
+        {% for item in history.coldkeys %}
+        <label class="coldkey-option" data-coldkey="{{ item.coldkey|lower }}">
+            <input type="checkbox" name="coldkey" value="{{ item.coldkey }}"
+                   {% if item.coldkey in selected_coldkeys %}checked{% endif %}>
+            <span title="{{ item.coldkey }}">{{ item.coldkey }}</span>
+            <span class="muted">({{ item.miner_count }} miners)</span>
+        </label>
+        {% else %}
+        <p class="empty">No miner coldkeys found for this subnet.</p>
+        {% endfor %}
+    </div>
+</form>
+
+<section class="panel">
+    <div class="panel-header">
+        <div>
+            <h2>Submissions by miner</h2>
+            <p class="muted">Separate chart for every selected miner. Showing the latest 30 epochs with every epoch labeled; each circle represents one submission.</p>
+        </div>
+        <span class="muted">{{ history.selected_miner_count }} miners · {{ history.epochs_count }} epochs</span>
+    </div>
+    {% if history.series %}
+    <div id="submission-charts" class="submission-charts"></div>
+    {% else %}
+    <div class="chart-empty">Select one or more coldkeys, then choose “Show chart”.</div>
+    {% endif %}
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const coldkeySearch = document.getElementById("coldkey-search");
+if (coldkeySearch) {
+    coldkeySearch.addEventListener("input", () => {
+        const query = coldkeySearch.value.toLowerCase();
+        document.querySelectorAll(".coldkey-option").forEach(option => {
+            option.hidden = !option.dataset.coldkey.includes(query);
+        });
+    });
+}
+</script>
+{% if history and history.series %}
+<script id="submission-series-data" type="application/json">
+{{ history.series|tojson }}
+</script>
+<script>
+{
+    const series = JSON.parse(
+        document.getElementById("submission-series-data").textContent
+    );
+    const colors = ["#7aa2ff", "#49d18d", "#ffb454", "#db8aff", "#ff6f7d",
+                    "#49c7d1", "#f1e05a", "#a9b7c9", "#ff8fca", "#9bdb74",
+                    "#ff9f68", "#72d6a0", "#ba9cff", "#f26cbb", "#8fb8ca"];
+    const NS = "http://www.w3.org/2000/svg";
+    const baseWidth = 1000;
+    const visibleEpochLimit = 30;
+    const chartContainer = document.getElementById("submission-charts");
+
+    function addSvg(svg, tag, attributes, text) {
+        const element = document.createElementNS(NS, tag);
+        Object.entries(attributes).forEach(([key, value]) => element.setAttribute(key, value));
+        if (text !== undefined) element.textContent = text;
+        svg.appendChild(element);
+        return element;
+    }
+
+    series.forEach((item, seriesIndex) => {
+        const card = document.createElement("article");
+        card.className = "miner-chart-card";
+        const heading = document.createElement("div");
+        heading.className = "miner-chart-heading";
+        const uid = document.createElement("strong");
+        uid.textContent = `UID ${item.uid}`;
+        const hotkey = document.createElement("span");
+        hotkey.className = "mono";
+        hotkey.textContent = item.hotkey;
+        const coldkey = document.createElement("span");
+        coldkey.className = "muted";
+        coldkey.textContent = item.coldkey;
+        heading.append(uid, hotkey, coldkey);
+        card.appendChild(heading);
+
+        const visiblePoints = item.points.slice(-visibleEpochLimit);
+        const epochCount = visiblePoints.length;
+        const margin = {top: 12, right: 18, bottom: 58, left: 18};
+        const width = baseWidth;
+        const maxCount = Math.max(...visiblePoints.map(point => point.submission_count), 0);
+        const dotSpacing = 7;
+        const plotHeight = Math.max(76, maxCount * dotSpacing);
+        const height = margin.top + plotHeight + margin.bottom;
+
+        const chartWrap = document.createElement("div");
+        chartWrap.className = "submission-chart-wrap";
+        const svg = document.createElementNS(NS, "svg");
+        svg.setAttribute("class", "submission-chart");
+        svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+        svg.setAttribute("role", "img");
+        svg.setAttribute("aria-label", `UID ${item.uid} submissions by epoch`);
+        chartWrap.appendChild(svg);
+        card.appendChild(chartWrap);
+        chartContainer.appendChild(card);
+
+        const plotWidth = width - margin.left - margin.right;
+        const color = colors[seriesIndex % colors.length];
+
+        const points = visiblePoints.map((point, index) => {
+            const x = margin.left + (
+                epochCount <= 1 ? plotWidth / 2 : index * plotWidth / (epochCount - 1)
+            );
+            return {point, x, index};
+        });
+
+        points.forEach(({point, x, index}) => {
+            for (let submission = 1; submission <= point.submission_count; submission++) {
+                const circle = addSvg(svg, "circle", {
+                    cx: x,
+                    cy: margin.top + plotHeight - (submission - 0.5) * dotSpacing,
+                    r: 4, fill: color,
+                    stroke: "#0b0f17", "stroke-width": 1.5
+                });
+                const title = document.createElementNS(NS, "title");
+                title.textContent = `UID ${item.uid} · epoch ${point.label} · submission ${submission} of ${point.submission_count}`;
+                circle.appendChild(title);
+            }
+
+            addSvg(svg, "text", {
+                x, y: height - margin.bottom + 14,
+                transform: `rotate(-45 ${x} ${height - margin.bottom + 14})`,
+                "text-anchor": "end", class: "chart-axis-text"
+            }, point.label);
+        });
+    });
+}
+</script>
+{% endif %}
+<script>
+const refreshSeconds = Number(
+    document.querySelector(".page-heading").dataset.refreshSeconds
+);
+if (refreshSeconds > 0) {
+    setTimeout(() => window.location.reload(), refreshSeconds * 1000);
+}
+</script>
+{% endblock %}

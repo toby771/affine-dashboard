@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}SN120 Manager{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body>
+<header class="topbar">
+    <div>
+        <div class="brand">SN120 Manager</div>
+        <div class="muted">Bittensor subnet {{ config.NETUID if config.NETUID else 120 }}</div>
+    </div>
+    <nav>
+        <a href="{{ url_for('dashboard') }}">Dashboard</a>
+        <a href="{{ url_for('submissions') }}">Submissions</a>
+        <button class="button secondary" onclick="refreshDashboard()">Refresh</button>
+    </nav>
+</header>
+
+<main class="container">
+    {% block content %}{% endblock %}
+</main>
+
+<script>
+async function refreshDashboard() {
+    const button = event?.target;
+    if (button) {
+        button.disabled = true;
+        button.textContent = "Refreshing…";
+    }
+
+    try {
+        const response = await fetch("/api/refresh", {method: "POST"});
+        if (!response.ok) throw new Error("Refresh failed");
+        window.location.reload();
+    } catch (error) {
+        alert(error.message);
+        if (button) {
+            button.disabled = false;
+            button.textContent = "Refresh";
+        }
+    }
+}
+</script>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

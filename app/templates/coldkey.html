@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}Coldkey — SN120 Manager{% endblock %}
+
+{% block content %}
+<a class="back" href="{{ url_for('dashboard') }}">← Dashboard</a>
+
+{% if error %}
+<div class="alert error">{{ error }}</div>
+{% endif %}
+
+{% if coldkey %}
+<section class="page-heading">
+    <div>
+        <h1>Coldkey</h1>
+        <div class="address mono">{{ coldkey.coldkey }}</div>
+    </div>
+</section>
+
+<section class="cards">
+    <div class="card">
+        <div class="label">Miner hotkeys</div>
+        <div class="value">{{ coldkey.miner_hotkeys }}</div>
+    </div>
+    <div class="card">
+        <div class="label">Active miners</div>
+        <div class="value">{{ coldkey.active_miners }}</div>
+    </div>
+    <div class="card">
+        <div class="label">Projected income / day</div>
+        <div class="value">{{ "%.4f"|format(coldkey.projected_tao_per_day) }} τ</div>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <div>
+            <h2>Hotkeys</h2>
+            <p class="muted">Hotkeys owned by this coldkey.</p>
+        </div>
+    </div>
+
+    <div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th>UID</th>
+                <th>Hotkey</th>
+                <th>Status</th>
+                <th>Projected τ / day</th>
+                <th>Incentive</th>
+                <th>Rank</th>
+                <th>Trust</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for m in coldkey.miners %}
+            <tr>
+                <td>{{ m.uid }}</td>
+                <td class="mono">{{ m.hotkey }}</td>
+                <td>
+                    <span class="pill {% if m.active %}good{% else %}bad{% endif %}">
+                        {{ "Active" if m.active else "Inactive" }}
+                    </span>
+                </td>
+                <td>{{ "%.4f"|format(m.projected_tao_per_day) }} τ</td>
+                <td>{{ "%.6f"|format(m.incentive) }}</td>
+                <td>{{ "%.6f"|format(m.rank) }}</td>
+                <td>{{ "%.6f"|format(m.trust) }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const refreshSeconds = {{ refresh_seconds|int }};
+if (refreshSeconds > 0) {
+    setTimeout(() => window.location.reload(), refreshSeconds * 1000);
+}
+</script>
+{% endblock %}

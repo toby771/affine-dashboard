@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block title %}SN120 Manager — Dashboard{% endblock %}
+
+{% block content %}
+{% if error %}
+<div class="alert error">
+    <strong>Unable to read Bittensor:</strong>
+    <span>{{ error }}</span>
+</div>
+{% endif %}
+
+{% if snapshot %}
+<section class="page-heading">
+    <div>
+        <h1>Subnet 120</h1>
+        <p class="muted">
+            {{ snapshot.network }} · block {{ "{:,}".format(snapshot.block) }}
+            · α price {{ "%.6f"|format(snapshot.alpha_price_tao) }} τ/α
+            · tempo {{ snapshot.tempo }} blocks
+            · updated {{ snapshot.updated_at | timestamp }}
+        </p>
+    </div>
+</section>
+
+<section class="cards">
+    <div class="card">
+        <div class="label">Registered UIDs</div>
+        <div class="value">{{ snapshot.neuron_count }}</div>
+    </div>
+    <div class="card">
+        <div class="label">Miner hotkeys</div>
+        <div class="value">{{ snapshot.miner_count }}</div>
+    </div>
+    <div class="card">
+        <div class="label">Active miners</div>
+        <div class="value">{{ snapshot.active_miner_count }}</div>
+    </div>
+    <div class="card">
+        <div class="label">Coldkeys</div>
+        <div class="value">{{ snapshot.coldkey_count }}</div>
+    </div>
+    <div class="card">
+        <div class="label">Projected miner income / day</div>
+        <div class="value">{{ "%.3f"|format(snapshot.projected_tao_per_day) }} τ</div>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <div>
+            <h2>Coldkey income summary</h2>
+            <p class="muted">Sorted by aggregate miner emission.</p>
+        </div>
+        <input id="search" class="search" placeholder="Search coldkey…" oninput="filterRows()">
+    </div>
+
+    <div class="table-wrap">
+    <table id="coldkeys">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Coldkey</th>
+                <th>Hotkeys</th>
+                <th>Active</th>
+                <th>Projected τ / day</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for c in snapshot.coldkeys %}
+            <tr data-search="{{ c.coldkey|lower }}">
+                <td>{{ loop.index }}</td>
+                <td class="mono">{{ c.short_coldkey }}</td>
+                <td>{{ c.miner_hotkeys }}</td>
+                <td>
+                    <span class="pill {% if c.active_miners > 0 %}good{% else %}bad{% endif %}">
+                        {{ c.active_miners }}/{{ c.miner_hotkeys }}
+                    </span>
+                </td>
+                <td><strong>{{ "%.4f"|format(c.projected_tao_per_day) }} τ</strong></td>
+                <td>
+                    <a class="button small" href="{{ url_for('coldkey_detail', coldkey=c.coldkey) }}">
+                        Details
+                    </a>
+                </td>
+            </tr>
+        {% else %}
+            <tr><td colspan="6" class="empty">No miner data found.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <div>
+            <h2>Miner hotkeys</h2>
+            <p class="muted">All non-validator-permit slots, sorted by emission.</p>
+        </div>
+    </div>
+
+    <div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th>UID</th>
+                <th>Hotkey</th>
+                <th>Coldkey</th>
+                <th>Active</th>
+                <th>Projected τ / day</th>
+                <th>Incentive</th>
+                <th>Stake</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for m in snapshot.miners %}
+            <tr>
+                <td>{{ m.uid }}</td>
+                <td class="mono">{{ m.short_hotkey }}</td>
+                <td class="mono">
+                    <a href="{{ url_for('coldkey_detail', coldkey=m.coldkey) }}">
+                        {{ m.short_coldkey }}
+                    </a>
+                </td>
+                <td>
+                    <span class="status-dot {% if m.active %}online{% endif %}"></span>
+                    {{ "Active" if m.active else "Inactive" }}
+                </td>
+                <td>{{ "%.4f"|format(m.projected_tao_per_day) }} τ</td>
+                <td>{{ "%.6f"|format(m.incentive) }}</td>
+                <td>{{ "%.4f"|format(m.stake_tao) }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterRows() {
+    const query = document.getElementById("search").value.toLowerCase();
+    document.querySelectorAll("#coldkeys tbody tr[data-search]").forEach(row => {
+        row.style.display = row.dataset.search.includes(query) ? "" : "none";
+    });
+}
+
+const refreshSeconds = {{ refresh_seconds|int }};
+if (refreshSeconds > 0) {
+    setTimeout(() => window.location.reload(), refreshSeconds * 1000);
+}
+</script>
+{% endblock %}
