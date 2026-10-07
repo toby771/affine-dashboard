@@ -160,7 +160,13 @@ GET /api/coldkeys
 ### Miner submissions by epoch
 
 Open `/submissions`, filter the coldkey list, select one or more coldkeys, and
-choose **Show chart**. For each selected coldkey, the page uses the current
+choose **Show chart**. The page starts with one stacked batch bar per epoch for
+the latest 20 epochs: learner-eligible submissions (`learner_eligible`) and
+learner-excluded submissions (`learner_excluded`) form a stacked bar, while a
+separate bar shows miner submissions (`submissions`). Values are labeled on
+the bars and the batch total (`batches`) appears above its stacked bar. Hover
+over either bar to see the epoch and all four exact counts. For each selected
+coldkey, the page uses the current
 metagraph to get every miner's UID and hotkey, then renders a separate plot for
 each miner. Each plot shows that miner's integer `epochs[].grid[uid]` count,
 with one vertically stacked circle per submission and no count labels or lines
