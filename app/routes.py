@@ -1,19 +1,25 @@
 from flask import jsonify, redirect, render_template, request, url_for
 
-from .bittensor_service import Subnet120Manager
+from .bittensor_service import MetagraphCache, Subnet120Manager
 from .config import Config
 from submissions import SubmissionService
 
 
+metagraph_cache = MetagraphCache(
+    ttl_seconds=Config.METAGRAPH_CACHE_SECONDS,
+    min_attempt_interval_seconds=Config.METAGRAPH_RETRY_SECONDS,
+)
 manager = Subnet120Manager(
     netuid=Config.NETUID,
     network=Config.NETWORK,
     cache_seconds=Config.CACHE_SECONDS,
     blocks_per_day=Config.BLOCKS_PER_DAY,
+    metagraph_cache=metagraph_cache,
 )
 submission_service = SubmissionService(
     netuid=Config.NETUID,
     network=Config.NETWORK,
+    metagraph_cache=metagraph_cache,
 )
 
 

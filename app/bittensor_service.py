@@ -1,15 +1,76 @@
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass, asdict
-from typing import Any
+from typing import Any, Callable
 
 import bittensor as bt
 
 
 RAO_PER_TOKEN = 1_000_000_000
+logger = logging.getLogger(__name__)
+
+
+class MetagraphCache:
+    """Share metagraph RPC results and throttle retries across app services."""
+
+    def __init__(
+        self,
+        ttl_seconds: int = 120,
+        min_attempt_interval_seconds: int = 90,
+    ):
+        self.ttl_seconds = ttl_seconds
+        self.min_attempt_interval_seconds = min_attempt_interval_seconds
+        self._lock = threading.Lock()
+        self._metagraph: Any | None = None
+        self._cached_at = 0.0
+        self._last_attempt_at = 0.0
+        self._last_error: Exception | None = None
+
+    def get(self, fetcher: Callable[[], Any]) -> Any:
+        with self._lock:
+            now = time.monotonic()
+            if (
+                self._metagraph is not None
+                and now - self._cached_at < self.ttl_seconds
+            ):
+                return self._metagraph
+
+            if (
+                self._last_attempt_at
+                and now - self._last_attempt_at
+                < self.min_attempt_interval_seconds
+            ):
+                if self._metagraph is not None:
+                    return self._metagraph
+                raise RuntimeError(
+                    "Metagraph RPC is in retry cooldown; no cached metagraph "
+                    "is available."
+                ) from self._last_error
+
+            self._last_attempt_at = now
+            try:
+                metagraph = fetcher()
+                if metagraph is None:
+                    raise RuntimeError("Metagraph RPC returned no data.")
+            except Exception as exc:
+                self._last_error = exc
+                if self._metagraph is not None:
+                    logger.warning(
+                        "Metagraph refresh failed; serving the last cached "
+                        "metagraph until the next retry window.",
+                        exc_info=True,
+                    )
+                    return self._metagraph
+                raise
+
+            self._metagraph = metagraph
+            self._cached_at = time.monotonic()
+            self._last_error = None
+            return metagraph
 
 
 @dataclass
@@ -83,11 +144,13 @@ class Subnet120Manager:
         network: str = "finney",
         cache_seconds: int = 30,
         blocks_per_day: int = 7200,
+        metagraph_cache: MetagraphCache | None = None,
     ):
         self.netuid = netuid
         self.network = network
         self.cache_seconds = cache_seconds
         self.blocks_per_day = blocks_per_day
+        self.metagraph_cache = metagraph_cache or MetagraphCache()
 
         self._lock = threading.Lock()
         self._cache: dict[str, Any] | None = None
@@ -119,10 +182,13 @@ class Subnet120Manager:
 
     def _sync_metagraph(self):
         """
-        Load the subnet metagraph with a fresh, scoped RPC connection.
+        Load the subnet metagraph through the shared cache.
 
         Prefer the current typed Subtensor API, with a fallback for older SDKs.
         """
+        return self.metagraph_cache.get(self._fetch_metagraph)
+
+    def _fetch_metagraph(self) -> Any:
         with bt.Subtensor(network=self.network) as sub:
             subnets = getattr(sub, "subnets", None)
             fetch_metagraph = getattr(subnets, "metagraph", None)

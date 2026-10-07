@@ -37,15 +37,20 @@ The dashboard also shows the fetched alpha spot price in TAO. For example, a
 price of `0.046528 τ` per alpha means each alpha of emission is valued at
 `0.046528 τ`. A USD quote such as `$13.902181` is not used for the TAO/day
 calculation. Emission-per-block is not shown; tables report only the projected
-daily TAO amount. The dashboard fetches a fresh metagraph on each page refresh
-(12 seconds by default) so the spot price and daily projections stay current.
+daily TAO amount. The dashboard refreshes every 120 seconds by default. All
+pages share one cached metagraph, refreshed at most once per 120 seconds, so
+dashboard, coldkey, and submissions views do not each open their own RPC
+connection.
 The on-chain per-miner emission allocation itself updates when the subnet
 completes its next epoch, so this is a projection based on the latest epoch,
 not a real-time payout stream.
 
 `python-dotenv` loads `.env` for direct `python app.py` and Gunicorn starts.
-`CACHE_SECONDS=0` disables snapshot caching so each refresh reads the latest
-metagraph.
+`METAGRAPH_CACHE_SECONDS` controls the shared metagraph cache (default 120);
+`METAGRAPH_RETRY_SECONDS` prevents retrying a failed RPC connection more often
+than every 90 seconds. If a refresh fails after a metagraph has been loaded,
+the app logs the error and serves the last cached metagraph until the next
+retry window.
 
 If you later want **actual realized income over time**, add a database and record snapshots/chain events. Do not treat the dashboard projection as historical payout accounting.
 
@@ -186,8 +191,11 @@ POST /api/refresh
 For a simple production deployment:
 
 ```bash
-gunicorn -w 2 -b 0.0.0.0:5000 app:app
+gunicorn -w 1 -b 0.0.0.0:5000 app:app
 ```
+
+Use one Gunicorn worker with the in-process RPC cache. Multiple workers have
+separate caches and can independently exceed an endpoint's WebSocket limit.
 
 Do not expose wallet/coldkey secrets to this application. The dashboard only needs public chain state for the functionality implemented here.
 

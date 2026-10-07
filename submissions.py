@@ -8,18 +8,26 @@ from urllib.request import Request, urlopen
 
 import bittensor as bt
 
+from app.bittensor_service import MetagraphCache
+
 
 AFFINE_DATA_URL = "https://affine.io/network-data.json"
-CACHE_TTL_SECONDS = 12
+CACHE_TTL_SECONDS = 120
 REQUEST_TIMEOUT_SECONDS = 15
 
 
 class SubmissionService:
     """Loads Affine epoch submission grids and maps current miner UIDs to coldkeys."""
 
-    def __init__(self, netuid: int = 120, network: str = "finney"):
+    def __init__(
+        self,
+        netuid: int = 120,
+        network: str = "finney",
+        metagraph_cache: MetagraphCache | None = None,
+    ):
         self.netuid = netuid
         self.network = network
+        self.metagraph_cache = metagraph_cache or MetagraphCache()
         self._lock = threading.Lock()
         self._epochs: list[dict[str, Any]] | None = None
         self._epochs_cached_at = 0.0
@@ -97,34 +105,38 @@ class SubmissionService:
             ):
                 return self._miners_by_coldkey
 
-            with bt.Subtensor(network=self.network) as subtensor:
-                metagraph = subtensor.subnets.metagraph(netuid=self.netuid)
-                if metagraph is None:
-                    raise RuntimeError(
-                        f"No metagraph found for netuid {self.netuid} "
-                        f"on network {self.network}."
-                    )
+            metagraph = self.metagraph_cache.get(self._fetch_metagraph)
 
-                owner_hotkey = metagraph.owner_hotkey
-                owner_coldkey = metagraph.owner_coldkey
-                miners_by_coldkey: dict[str, list[dict[str, Any]]] = {}
-                for neuron in metagraph:
-                    if (
-                        neuron.validator_permit
-                        or neuron.hotkey == owner_hotkey
-                        or neuron.coldkey == owner_coldkey
-                    ):
-                        continue
-                    miners_by_coldkey.setdefault(neuron.coldkey, []).append(
-                        {
-                            "uid": neuron.uid,
-                            "hotkey": neuron.hotkey,
-                        }
-                    )
+            owner_hotkey = metagraph.owner_hotkey
+            owner_coldkey = metagraph.owner_coldkey
+            miners_by_coldkey: dict[str, list[dict[str, Any]]] = {}
+            for neuron in metagraph:
+                if (
+                    neuron.validator_permit
+                    or neuron.hotkey == owner_hotkey
+                    or neuron.coldkey == owner_coldkey
+                ):
+                    continue
+                miners_by_coldkey.setdefault(neuron.coldkey, []).append(
+                    {
+                        "uid": neuron.uid,
+                        "hotkey": neuron.hotkey,
+                    }
+                )
 
             self._miners_by_coldkey = miners_by_coldkey
             self._miners_cached_at = time.monotonic()
             return miners_by_coldkey
+
+    def _fetch_metagraph(self) -> Any:
+        with bt.Subtensor(network=self.network) as subtensor:
+            metagraph = subtensor.subnets.metagraph(netuid=self.netuid)
+            if metagraph is None:
+                raise RuntimeError(
+                    f"No metagraph found for netuid {self.netuid} "
+                    f"on network {self.network}."
+                )
+            return metagraph
 
     def history(self, selected_coldkeys: list[str]) -> dict[str, Any]:
         epochs = self._load_epochs()
