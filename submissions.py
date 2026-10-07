@@ -203,11 +203,22 @@ class SubmissionService:
                     }
                 )
 
+        latest_epoch_start = overview[-1]["start"] if overview else None
+        latest_epoch_label = overview[-1]["label"] if overview else None
+        selected_submission_total = sum(
+            miner_series["points"][-1]["submission_count"]
+            for miner_series in series
+            if miner_series["points"]
+            and miner_series["points"][-1]["start"] == latest_epoch_start
+        )
+
         return {
             "netuid": self.netuid,
             "coldkeys": coldkeys,
             "selected_coldkeys": selected_coldkeys,
             "selected_miner_count": len(series),
+            "selected_submission_total": selected_submission_total,
+            "latest_epoch_label": latest_epoch_label,
             "epochs_count": len(epochs),
             "overview": overview,
             "series": series,

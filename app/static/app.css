@@ -292,6 +292,29 @@ tbody tr:hover {
     padding: 8px 18px 0;
 }
 
+.epoch-overview-summary {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px 20px;
+    text-align: right;
+}
+
+.epoch-overview-summary > div {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.epoch-overview-summary strong {
+    color: var(--text);
+    font-size: 18px;
+}
+
+.epoch-overview-summary .muted {
+    font-size: 11px;
+}
+
 .epoch-overview-chart {
     display: block;
     width: 100%;

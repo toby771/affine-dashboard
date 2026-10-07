@@ -28,6 +28,16 @@
             <h2>Epoch overview</h2>
             <p class="muted">Each epoch has a stacked batch bar and a miner-submissions bar. Values are marked on the bars; hover over either bar for all epoch details.</p>
         </div>
+        <div class="epoch-overview-summary" aria-label="Selected miner submission summary">
+            <div>
+                <strong>{{ history.selected_miner_count }}</strong>
+                <span class="muted">miners in checked coldkeys</span>
+            </div>
+            <div>
+                <strong>{{ history.selected_submission_total }}</strong>
+                <span class="muted">selected miners’ submissions · epoch {{ history.latest_epoch_label or "—" }}</span>
+            </div>
+        </div>
     </div>
     <div class="epoch-overview-chart-wrap">
         <svg id="epoch-overview-chart" class="epoch-overview-chart"
