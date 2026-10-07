@@ -288,6 +288,69 @@ tbody tr:hover {
     padding: 14px;
 }
 
+.epoch-overview-chart-wrap {
+    padding: 8px 18px 0;
+}
+
+.epoch-overview-chart {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.epoch-overview-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 22px;
+    padding: 4px 20px 18px;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.epoch-overview-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.overview-key {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+.overview-key.eligible {
+    background: #49d18d;
+}
+
+.overview-key.excluded {
+    background: #ffb454;
+}
+
+.overview-key.miners {
+    background: #db8aff;
+}
+
+.epoch-bar-value {
+    fill: #11151d;
+    font-size: 9px;
+    font-weight: 700;
+    pointer-events: none;
+}
+
+.epoch-batch-total {
+    fill: var(--text);
+}
+
+.epoch-overview-bar {
+    transition: opacity 120ms ease;
+}
+
+.epoch-overview-bar:hover {
+    opacity: 0.75;
+}
+
 .submission-chart-wrap {
     width: 100%;
 }

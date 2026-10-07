@@ -156,6 +156,24 @@ class SubmissionService:
         ]
         coldkeys.sort(key=lambda item: (-item["miner_count"], item["coldkey"]))
 
+        ordered_epochs = sorted(
+            epochs,
+            key=lambda epoch: int(epoch.get("start", 0)),
+        )
+        overview = []
+        for epoch in ordered_epochs[-20:]:
+            epoch_id = str(epoch.get("id", ""))
+            overview.append(
+                {
+                    "label": epoch_id.rsplit("-", 1)[-1] or epoch_id,
+                    "start": int(epoch.get("start", 0)),
+                    "batches": int(epoch.get("batches", 0) or 0),
+                    "eligible": int(epoch.get("learner_eligible", 0) or 0),
+                    "excluded": int(epoch.get("learner_excluded", 0) or 0),
+                    "submissions": int(epoch.get("submissions", 0) or 0),
+                }
+            )
+
         series = []
         for coldkey in selected_coldkeys:
             for miner in miners_by_coldkey[coldkey]:
@@ -191,6 +209,7 @@ class SubmissionService:
             "selected_coldkeys": selected_coldkeys,
             "selected_miner_count": len(series),
             "epochs_count": len(epochs),
+            "overview": overview,
             "series": series,
             "updated_at": time.time(),
         }

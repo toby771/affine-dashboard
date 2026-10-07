@@ -22,6 +22,26 @@
 {% endif %}
 
 {% if history %}
+<section class="panel epoch-overview">
+    <div class="panel-header">
+        <div>
+            <h2>Epoch overview</h2>
+            <p class="muted">Each epoch has a stacked batch bar and a miner-submissions bar. Values are marked on the bars; hover over either bar for all epoch details.</p>
+        </div>
+    </div>
+    <div class="epoch-overview-chart-wrap">
+        <svg id="epoch-overview-chart" class="epoch-overview-chart"
+             viewBox="0 0 1000 320" role="img"
+             aria-label="Stacked batch bars and miner submission bars by epoch"></svg>
+    </div>
+    <div class="epoch-overview-legend" aria-label="Chart legend">
+        <span><i class="overview-key eligible"></i>Learner eligible</span>
+        <span><i class="overview-key excluded"></i>Learner excluded</span>
+        <span><i class="overview-key miners"></i>Miners</span>
+        <span class="muted">Batches = total above the stacked bar</span>
+    </div>
+</section>
+
 <form class="panel selection-panel" method="get" action="{{ url_for('submissions') }}">
     <div class="selection-tools">
         <input id="coldkey-search" class="search" type="search"
@@ -60,6 +80,125 @@
 {% endblock %}
 
 {% block scripts %}
+{% if history %}
+<script id="epoch-overview-data" type="application/json">
+{{ history.overview|tojson }}
+</script>
+<script>
+{
+    const data = JSON.parse(
+        document.getElementById("epoch-overview-data").textContent
+    );
+    const svg = document.getElementById("epoch-overview-chart");
+    const ns = "http://www.w3.org/2000/svg";
+    const width = 1000;
+    const height = 320;
+    const margin = {top: 18, right: 24, bottom: 64, left: 18};
+    const plotWidth = width - margin.left - margin.right;
+    const plotHeight = height - margin.top - margin.bottom;
+    const maxValue = Math.max(...data.flatMap(item => [
+        item.batches,
+        item.eligible + item.excluded,
+        item.submissions
+    ]), 0);
+    const yMax = Math.max(1, maxValue);
+    const xForIndex = index => margin.left + (
+        data.length <= 1 ? plotWidth / 2 : index * plotWidth / (data.length - 1)
+    );
+    const yForValue = value => margin.top + plotHeight
+        - (value / yMax) * plotHeight;
+
+    function add(tag, attributes, text) {
+        const element = document.createElementNS(ns, tag);
+        Object.entries(attributes).forEach(([key, value]) => {
+            element.setAttribute(key, value);
+        });
+        if (text !== undefined) element.textContent = text;
+        svg.appendChild(element);
+        return element;
+    }
+
+    for (let tick = 0; tick <= 4; tick++) {
+        const value = Math.round(yMax * tick / 4);
+        const y = yForValue(value);
+        add("line", {
+            x1: margin.left, y1: y, x2: width - margin.right, y2: y,
+            class: "chart-grid"
+        });
+    }
+
+    const groupWidth = plotWidth / Math.max(data.length, 1);
+    const barWidth = Math.max(4, Math.min(20, groupWidth * 0.42));
+    const baseline = margin.top + plotHeight;
+
+    data.forEach((point, epochIndex) => {
+        const centerX = xForIndex(epochIndex);
+        const batchCenterX = centerX - groupWidth * 0.24;
+        const minerCenterX = centerX + groupWidth * 0.24;
+        const batchX = batchCenterX - barWidth / 2;
+        const minerX = minerCenterX - barWidth / 2;
+        const eligibleY = yForValue(point.eligible);
+        const totalY = yForValue(point.eligible + point.excluded);
+        const batchTooltipText = `Epoch ${point.label} · Batches: ${point.batches} · Learner eligible: ${point.eligible} · Learner excluded: ${point.excluded} · Miners: ${point.submissions}`;
+
+        const eligibleBar = add("rect", {
+            x: batchX, y: eligibleY, width: barWidth,
+            height: Math.max(0, baseline - eligibleY),
+            rx: 1, fill: "#49d18d", class: "epoch-overview-bar"
+        });
+        const eligibleTitle = document.createElementNS(ns, "title");
+        eligibleTitle.textContent = batchTooltipText;
+        eligibleBar.appendChild(eligibleTitle);
+
+        const excludedBar = add("rect", {
+            x: batchX, y: totalY, width: barWidth,
+            height: Math.max(0, eligibleY - totalY),
+            rx: 1, fill: "#ffb454", class: "epoch-overview-bar"
+        });
+        const excludedTitle = document.createElementNS(ns, "title");
+        excludedTitle.textContent = batchTooltipText;
+        excludedBar.appendChild(excludedTitle);
+
+        const minerY = yForValue(point.submissions);
+        const minerBar = add("rect", {
+            x: minerX, y: minerY, width: barWidth,
+            height: Math.max(0, baseline - minerY),
+            rx: 1, fill: "#db8aff", class: "epoch-overview-bar"
+        });
+        const minerTitle = document.createElementNS(ns, "title");
+        minerTitle.textContent = batchTooltipText;
+        minerBar.appendChild(minerTitle);
+
+        add("text", {
+            x: batchCenterX,
+            y: point.eligible > 0 ? (baseline + eligibleY) / 2 + 3 : baseline - 3,
+            "text-anchor": "middle", class: "epoch-bar-value"
+        }, String(point.eligible));
+        add("text", {
+            x: batchCenterX,
+            y: point.excluded > 0 ? (eligibleY + totalY) / 2 + 3 : totalY - 3,
+            "text-anchor": "middle", class: "epoch-bar-value"
+        }, String(point.excluded));
+        add("text", {
+            x: batchCenterX, y: totalY - 5,
+            "text-anchor": "middle", class: "epoch-bar-value epoch-batch-total"
+        }, String(point.batches));
+        add("text", {
+            x: minerCenterX,
+            y: point.submissions > 0 ? (baseline + minerY) / 2 + 3 : baseline - 3,
+            "text-anchor": "middle", class: "epoch-bar-value"
+        }, String(point.submissions));
+
+        const labelY = height - margin.bottom + 15;
+        add("text", {
+            x: centerX, y: labelY,
+            transform: `rotate(-45 ${centerX} ${labelY})`,
+            "text-anchor": "end", class: "chart-axis-text"
+        }, point.label);
+    });
+}
+</script>
+{% endif %}
 <script>
 const coldkeySearch = document.getElementById("coldkey-search");
 if (coldkeySearch) {
